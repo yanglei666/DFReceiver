@@ -1,0 +1,561 @@
+C51 COMPILER V9.01   MAIN                                                                  12/09/2018 21:09:03 PAGE 1   
+
+
+C51 COMPILER V9.01, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: E:\Keil_v4\C51\BIN\C51.EXE main.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include"EEPROM.h"
+   2          #include"PCA.h"
+   3          #include"ADC.h"
+   4          //IO初始化操作
+   5          unsigned char cnt    = 0;                           //存储PCA计时溢出次数
+   6          unsigned long count0 = 0;                           //记录上一次的捕获值
+   7          unsigned long count1 = 0;                           //记录本次的捕获值
+   8          unsigned long length = 0;                           //存储信号的时间长度
+   9          bit  bSigSwitch = 0;
+  10          sbit LEDR = P2^3;
+  11          sbit LEDG = P2^4;
+  12          sbit LEDB = P2^5;
+  13          sbit Beep = P0^7;
+  14          sbit bAnalog   = P1^6;  //模拟电路开关
+  15          sbit bBoost    = P3^4;  //Boost开关
+  16          sbit bAttack   = P3^5;  //电击开关
+  17          
+  18          bit  bEnableBeep   = 1;
+  19          bit  bEnableAttack = 1;
+  20          
+  21          u8 nAlarm1Cnt = 0;
+  22          u8 nAlarm2Cnt = 0;
+  23          u8 nCodeCnt   = 0;
+  24          u16 nTrgCnt    = 0;    //触发次数
+  25          u8 nAlarmLevel = 1;    //档位
+  26          u8 nAlarmLevelOld = 1; //上一次档位
+  27          
+  28          u16 nADCVal = 0;            //ADC数值
+  29          
+  30          bit  bStartData = 0;
+  31          
+  32          
+  33          u8   nAlarm1BeepEventCnt = 0;
+  34          u8   nAlarm1AttackEventCnt = 0;
+  35          u8   nAlarm2BeepEventCnt = 0;
+  36          u8   nAlarm2AttackEventCnt = 0;
+  37          bit  bAlarm1Event = 0;
+  38          bit  bAlarm2Event = 0;
+  39          bit  bCodeEvent = 0;
+  40          
+  41          u8 nBeepTrgCnt        = 0;   //Beep触发次数
+  42          u8 nLedTrgCnt         = 0;   //Led触发次数
+  43          u8 nAttackTrgCnt      = 0;   //电击触发次数
+  44          u16  nBeepWaitCnt     = 0;   //Beep延迟时间ms
+  45          u16  nAttackOffCntS   = 0;   //Boost空闲时间ms(设置的)
+  46          u16  nAttackOffCntC   = 0;   //Boost空闲时间ms(当前使用的)
+  47          bit  bStartBeepTrg    = 0;       //Beep触发开始标志位
+  48          bit  bBeepFlag        = 0;       //Beep立即响应标志位
+  49          bit  bStartLedTrg     = 0;       //Led触发开始标志位
+  50          bit  bStartAttackTrg  = 0;       //电击触发开始标志位
+  51          
+  52          //不同档位刺激次数表
+  53          u8 AttackLeveTb[] = {1,2,2,7,13};
+  54          //不同档位电击空闲时间表
+  55          u16 AttackOffTb[] = {969,1969,969,135,52};
+C51 COMPILER V9.01   MAIN                                                                  12/09/2018 21:09:03 PAGE 2   
+
+  56          
+  57          //电池管理任务
+  58          void PowerManageTask()
+  59          {
+  60   1         if(nADCVal >= POWER_ATTACK_ON)
+  61   1         {
+  62   2                      bEnableAttack = 1;
+  63   2         }
+  64   1         else if(nADCVal <= POWER_ATTACK_OFF)
+  65   1         {
+  66   2              bEnableAttack = 0;
+  67   2         }
+  68   1      
+  69   1         if(nADCVal >= POWER_BEEP_ON)
+  70   1         {
+  71   2                      bEnableBeep = 1;
+  72   2         }
+  73   1         else if(nADCVal <= POWER_BEEP_OFF)
+  74   1         {
+  75   2              bEnableBeep = 0;
+  76   2         }
+  77   1      }
+  78          
+  79          //设置蜂鸣器
+  80          void SetBeep(bit bval)
+  81          {
+  82   1              if(bEnableBeep)
+  83   1              {
+  84   2                      if(!bEnableAttack)
+  85   2                      {
+  86   3                          LEDG = ~bval;
+  87   3                      }
+  88   2                      Beep = bval;
+  89   2              }
+  90   1              else
+  91   1                  LEDR = ~bval;
+  92   1          if(bval)
+  93   1          printf("SetBeep 1\n");
+  94   1              else
+  95   1              printf("SetBeep 0\n");
+  96   1      }
+  97          
+  98          //获取EEPROM配置
+  99          void LoadConfig()
+ 100          {
+ 101   1         nAlarmLevel = IapReadByte(ALARM_SET_ADDR);
+ 102   1         //对数据的有效性进行判断
+ 103   1         if((nAlarmLevel >5)||(nAlarmLevel < 1))      
+ 104   1         {
+ 105   2             nAlarmLevel = 1;
+ 106   2         }
+ 107   1         nAlarmLevelOld = nAlarmLevel;
+ 108   1         nAttackOffCntS = AttackOffTb[nAlarmLevel-1];
+ 109   1         nAttackOffCntC = nAttackOffCntS;
+ 110   1      }
+ 111          
+ 112          //保存EEPROM配置
+ 113          void SaveConfig()
+ 114          {
+ 115   1        IapEraseSector(ALARM_SET_ADDR);
+ 116   1        IapProgramByte(ALARM_SET_ADDR,nAlarmLevel);
+ 117   1      }
+C51 COMPILER V9.01   MAIN                                                                  12/09/2018 21:09:03 PAGE 3   
+
+ 118          
+ 119          void IOInit(void)
+ 120          {
+ 121   1         //输出口全部设置推挽输出模式
+ 122   1         P2M1 = 0x00;
+ 123   1         P2M0 = 0xff;
+ 124   1         P3M1 &= 0xfd;
+ 125   1         P3M0 |= 0x02;
+ 126   1         P3M1 &= 0xdf;
+ 127   1         P3M0 |= 0x20;
+ 128   1         P3M1 &= 0xef;
+ 129   1         P3M0 |= 0x10;
+ 130   1         P1M0 |= 0x40;
+ 131   1         P1M1 &= 0xbf;
+ 132   1         P0M0 |= 0x80;
+ 133   1         P0M1 &= 0x7f;
+ 134   1      }
+ 135          
+ 136          void main()
+ 137          {  
+ 138   1         //获取EEPROM配置
+ 139   1         LoadConfig(); 
+ 140   1         //配置Timer3
+ 141   1         Timer3Init();
+*** WARNING C206 IN LINE 141 OF MAIN.C: 'Timer3Init': missing function-prototype
+ 142   1         //PCA配置
+ 143   1         PCAInit();
+ 144   1         //初始化串口1    
+ 145   1         Uart1Init();
+*** WARNING C206 IN LINE 145 OF MAIN.C: 'Uart1Init': missing function-prototype
+ 146   1         //IO口配置
+ 147   1         IOInit();
+ 148   1         //ADC配置
+ 149   1         ADCInit();
+ 150   1         //打开总中断
+ 151   1         EA = 1;
+ 152   1         //开启ADC转换
+ 153   1         StartADC();
+ 154   1         //打开模拟电路
+ 155   1         bAnalog  = 0;
+ 156   1         bBoost   = 0;
+ 157   1         bAttack  = 0;
+ 158   1         Beep     = 0;
+ 159   1      
+ 160   1         while(1)
+ 161   1         {
+ 162   2             if(nAlarm1BeepEventCnt > 1)
+ 163   2                 {
+ 164   3                        if(nBeepTrgCnt == 0)  //如果结束了上一次触发
+ 165   3                        {
+ 166   4                           //printf("nAlarm1BeepEventCnt %bu \n",nAlarm1BeepEventCnt);
+ 167   4                           nAlarm1BeepEventCnt--;
+ 168   4                               nBeepTrgCnt   = 1;
+ 169   4                               bBeepFlag     = 1;
+ 170   4                                 
+ 171   4                        }
+ 172   3                 }
+ 173   2                 
+ 174   2                 if(nAlarm2BeepEventCnt > 1)
+ 175   2                 {
+ 176   3                        if(nBeepTrgCnt == 0)  //如果结束了上一次触发
+ 177   3                        {
+C51 COMPILER V9.01   MAIN                                                                  12/09/2018 21:09:03 PAGE 4   
+
+ 178   4                           //printf("nAlarm2BeepEventCnt %bu \n",nAlarm2BeepEventCnt);
+ 179   4                           nAlarm2BeepEventCnt--;
+ 180   4                               nBeepTrgCnt   = 1;
+ 181   4                               bBeepFlag     = 1; 
+ 182   4                        }
+ 183   3                 }
+ 184   2      
+ 185   2                 if(nAlarm1AttackEventCnt > 0)
+ 186   2                 {
+ 187   3                        if(nAttackTrgCnt == 0)
+ 188   3                        {
+ 189   4                           nAlarm1AttackEventCnt--;
+ 190   4                               if(nAlarmLevel > 1)//1档不电击
+ 191   4                               {
+ 192   5                                  nAlarmLevelOld = nAlarmLevel;
+ 193   5                                      nAttackTrgCnt  = AttackLeveTb[nAlarmLevel-1];
+ 194   5                                  nAttackOffCntS = AttackOffTb[nAlarmLevel-1];
+ 195   5                               }
+ 196   4                        }
+ 197   3                 }
+ 198   2                 
+ 199   2                 if(nAlarm2AttackEventCnt > 0)
+ 200   2                 {
+ 201   3                        if(nAttackTrgCnt == 0)
+ 202   3                        {
+ 203   4                           nAlarm2AttackEventCnt--;
+ 204   4                               if(nAlarmLevel > 1)//1档不电击
+ 205   4                               {
+ 206   5                                  nAlarmLevelOld = nAlarmLevel;
+ 207   5                                      nAttackTrgCnt  = AttackLeveTb[nAlarmLevel-1];
+ 208   5                                  nAttackOffCntS = AttackOffTb[nAlarmLevel-1];
+ 209   5                               }
+ 210   4                        }
+ 211   3                 }
+ 212   2                 
+ 213   2                 if(bCodeEvent)
+ 214   2                 {
+ 215   3                    bCodeEvent = 0;
+ 216   3                        if(nAlarmLevel >= 5)
+ 217   3                        {
+ 218   4                           nAlarmLevel = 1;
+ 219   4                        }     
+ 220   3                        else
+ 221   3                        {
+ 222   4                               nAlarmLevel++;
+ 223   4                        }
+ 224   3                        SaveConfig(); 
+ 225   3                        nLedTrgCnt = nAlarmLevel;
+ 226   3                    printf("bCodeEvent happen \n");
+ 227   3                 }
+ 228   2                 
+ 229   2                 //电池管理任务
+ 230   2                 PowerManageTask();      
+ 231   2         }
+ 232   1      }
+ 233          
+ 234          void ADC_Isr() interrupt 5 using 1
+ 235          {
+ 236   1          u16 DataL = 0,DataH = 0;
+ 237   1          ADC_CONTR &= ~0x20;                         //清中断标志
+ 238   1          nADCVal = ADC_RES;
+ 239   1              DataH   = nADCVal;                          //读取ADC结果
+C51 COMPILER V9.01   MAIN                                                                  12/09/2018 21:09:03 PAGE 5   
+
+ 240   1              nADCVal = nADCVal <<4;
+ 241   1              DataL   = ADC_RESL>>4;
+ 242   1              nADCVal = nADCVal|DataL;
+ 243   1          ADC_CONTR |= 0x40;                          //继续AD转换
+ 244   1              //printf("nADCVal :%d H : %d L :%d \n",nADCVal,DataH,DataL);
+ 245   1      }
+ 246          
+ 247          /*******************************************************************************
+ 248          * 函 数 名         : void Timer0() interrupt 1
+ 249          * 函数功能                 : 定时器0中断函数
+ 250          * 输    入         : 无
+ 251          * 输    出         : 无
+ 252          *******************************************************************************/
+ 253          void Timer0() interrupt 1  using 1
+ 254          {
+ 255   1              static u16 iCnt =0;         //发射周期指针
+ 256   1              u16 PWMOnCnt = 0,PWMOffCnt = 0;
+ 257   1              PWMOnCnt  = 30;
+ 258   1              PWMOffCnt = 314;
+ 259   1              TL0 = 0x6C;             //设置定时初值 106
+ 260   1              TH0 = 0xFB;             //设置定时初值
+ 261   1          iCnt++;
+ 262   1              if(iCnt == PWMOnCnt)
+ 263   1              {
+ 264   2                      bSigSwitch = 0;
+ 265   2              }
+ 266   1              if(iCnt == PWMOffCnt)
+ 267   1              {
+ 268   2                      iCnt = 0;
+ 269   2                      bSigSwitch = 1;
+ 270   2              }
+ 271   1              //Signal = (~Signal)&   bSigSwitch;
+ 272   1      }
+ 273          
+ 274          void PCA_Isr() interrupt 7
+ 275          {
+ 276   1          if (CF)
+ 277   1          {
+ 278   2              CF = 0;
+ 279   2                      if(bStartData)  //如果正在检测中
+ 280   2                      {
+ 281   3                              cnt++;
+ 282   3                              if((cnt - ((unsigned char *)&count1)[1])>= ENDTIME) //检测到停止信号
+ 283   3                              {
+ 284   4                                 //212us周期个数检测
+ 285   4                                 if((nAlarm1Cnt <= BB_CNT_HIGH)&&(nAlarm1Cnt >= BB_CNT_LOW)&&(nTrgCnt < BB_LEN_HIGH))
+ 286   4                                 {
+ 287   5                                         if(nAlarm1BeepEventCnt < 2)
+ 288   5                                            nAlarm1BeepEventCnt++;
+ 289   5                                         if(nAlarm1AttackEventCnt < 2)
+ 290   5                                            nAlarm1AttackEventCnt++;
+ 291   5                                         printf("nAlarm1Cnt: %bu nTrgCnt %u\n",nAlarm1Cnt,nTrgCnt);
+ 292   5                                 }
+ 293   4                                 else if(nAlarm1Cnt > 0)
+ 294   4                                 {
+ 295   5                                         //printf("invalid  nAlarm1Cnt: %bu nTrgCnt %u\n",nAlarm1Cnt,nTrgCnt);
+ 296   5                                 }
+ 297   4                                 //138us周期个数检测
+ 298   4                                 if((nAlarm2Cnt <= CC_CNT_HIGH)&&(nAlarm2Cnt >= CC_CNT_LOW)&&(nTrgCnt < CC_LEN_HIGH))
+ 299   4                                 {
+ 300   5                                     if(nAlarm2BeepEventCnt < 2)
+ 301   5                                            nAlarm2BeepEventCnt++;
+C51 COMPILER V9.01   MAIN                                                                  12/09/2018 21:09:03 PAGE 6   
+
+ 302   5                                         if(nAlarm2AttackEventCnt < 2)
+ 303   5                                            nAlarm2AttackEventCnt++;
+ 304   5                                         printf("nAlarm2Cnt: %bu nTrgCnt %u\n",nAlarm2Cnt,nTrgCnt);
+ 305   5                                 }
+ 306   4                                 else if(nAlarm2Cnt > 0)
+ 307   4                                 {
+ 308   5                                         //printf("invalid  nAlarm2Cnt: %bu nTrgCnt %u\n",nAlarm2Cnt,nTrgCnt);
+ 309   5                                 }
+ 310   4                                 //182us周期个数检测
+ 311   4                                 if((nCodeCnt <= CODE_CNT_HIGH)&&(nCodeCnt >= CODE_CNT_LOW)&&(nTrgCnt < CODE_LEN_HIGH))
+ 312   4                                 {
+ 313   5                                     bCodeEvent = 1;
+ 314   5                                 }
+ 315   4                                 else if(nCodeCnt > 0)
+ 316   4                                 {
+ 317   5                                         //printf("invalid  nCodeCnt: %bu\n",nCodeCnt);
+ 318   5                                 }
+ 319   4                                 //复位操作
+ 320   4                                 bStartData = 0;
+ 321   4                                 cnt = 0; 
+ 322   4                                 nTrgCnt    = 0;
+ 323   4                                 nAlarm1Cnt = 0;
+ 324   4                                 nAlarm2Cnt = 0; 
+ 325   4                                 nCodeCnt   = 0;
+ 326   4                                 count0     = 0;
+ 327   4                                 count1     = 0;
+ 328   4                                 length     = 0;
+ 329   4                              }
+ 330   3                      }
+ 331   2                 
+ 332   2          }
+ 333   1          if (CCF3)
+ 334   1          {
+ 335   2              CCF3 = 0;
+ 336   2                      nTrgCnt++;
+ 337   2              count0 = count1;                        //备份上一次的捕获值
+ 338   2              ((unsigned char *)&count1)[3] = CCAP3L;
+ 339   2              ((unsigned char *)&count1)[2] = CCAP3H;
+ 340   2              ((unsigned char *)&count1)[1] = cnt;
+ 341   2              ((unsigned char *)&count1)[0] = 0;
+ 342   2              length = count1 - count0;              //length保存的即为捕获的脉冲宽度
+ 343   2                      
+ 344   2                      if((bStartData)&&(nTrgCnt > (IGNORE_CNT +1)))  //忽略前面起振的脉冲数
+ 345   2                      {
+ 346   3                         //212us周期检测
+ 347   3                         if((length <= BB_PWM_HIGH)&&(length >= BB_PWM_LOW))
+ 348   3                         {
+ 349   4                             nAlarm1Cnt++;
+ 350   4                         }
+ 351   3                         //138us周期检测
+ 352   3                         if((length <= CC_PWM_HIGH)&&(length >= CC_PWM_LOW))
+ 353   3                         {
+ 354   4                             nAlarm2Cnt++;
+ 355   4                         }
+ 356   3                         //182us周期检测
+ 357   3                         if((length <= CODE_PWM_HIGH)&&(length >= CODE_PWM_LOW))
+ 358   3                         {
+ 359   4                             nCodeCnt++;
+ 360   4                         }                    
+ 361   3                      }
+ 362   2      
+ 363   2                      //第一次接收到上升沿，开启数据检测过程
+C51 COMPILER V9.01   MAIN                                                                  12/09/2018 21:09:03 PAGE 7   
+
+ 364   2                      if(!bStartData)
+ 365   2                      {
+ 366   3                     bStartData = 1;
+ 367   3                         cnt = 0; 
+ 368   3                         nAlarm1Cnt = 0;
+ 369   3                         nAlarm2Cnt = 0; 
+ 370   3                         nCodeCnt   = 0;
+ 371   3                      }        
+ 372   2          }
+ 373   1      }
+ 374          
+ 375          void Timer3() interrupt 19  using 1
+ 376          {
+ 377   1              static u16  iBeepCnt    = 0;
+ 378   1              static u16  iLedCnt     = 0;
+ 379   1              static u16  iAttackCnt  = 0;
+ 380   1      
+ 381   1              iBeepCnt++;
+ 382   1              iLedCnt++;
+ 383   1              iAttackCnt++;
+ 384   1      
+ 385   1              //触发Beep的第一个周期
+ 386   1              if((bBeepFlag == 1)&&(nBeepTrgCnt == 1))
+ 387   1              {
+ 388   2                  printf("iBeepCnt: %u \n",iBeepCnt);
+ 389   2                  bBeepFlag = 0;
+ 390   2                  iBeepCnt  = 1;
+ 391   2                  bStartBeepTrg = 1;
+ 392   2                      SetBeep(1);
+ 393   2                      //Beep = 1;
+ 394   2              }
+ 395   1               
+ 396   1                
+ 397   1              //触发Led的第一个周期
+ 398   1              if((iLedCnt == 1)&&(nLedTrgCnt == nAlarmLevel))
+ 399   1              {
+ 400   2                  bStartLedTrg = 1;
+ 401   2                      LEDB = 0;
+ 402   2              }
+ 403   1               
+ 404   1              //触发电击的第一个周期
+ 405   1              if((iAttackCnt == 1)&&(nAttackTrgCnt == AttackLeveTb[nAlarmLevelOld-1]))
+ 406   1              {
+ 407   2                  bStartAttackTrg = 1;
+ 408   2                      nAttackOffCntC = nAttackOffCntS;   //设置的周期传递给当前使用的
+ 409   2                      if(bEnableAttack)
+ 410   2                      {
+ 411   3                              bBoost     = 0;
+ 412   3                      bAttack    = 0;
+ 413   3                      }
+ 414   2              }  
+ 415   1      
+ 416   1              //峰鸣器工作逻辑
+ 417   1              if(iBeepCnt == BEEP_ON_CNT)
+ 418   1              {
+ 419   2                  if((nBeepTrgCnt > 0)&&(bStartBeepTrg == 1))
+ 420   2                      {
+ 421   3                              //Beep = 0;
+ 422   3                              SetBeep(0);
+ 423   3                      }    
+ 424   2              }
+ 425   1              else if(iBeepCnt == BEEP_OFF_CNT)
+C51 COMPILER V9.01   MAIN                                                                  12/09/2018 21:09:03 PAGE 8   
+
+ 426   1              {
+ 427   2                  if((nBeepTrgCnt > 0)&&(bStartBeepTrg == 1))
+ 428   2                      {
+ 429   3                              nBeepTrgCnt--;
+ 430   3                              if(nBeepTrgCnt == 0)
+ 431   3                              {
+ 432   4                                 bAlarm1Event = 0;
+ 433   4                                 bAlarm2Event = 0;
+ 434   4                                 bStartBeepTrg = 0;
+ 435   4                                 SetBeep(0);
+ 436   4                                 //Beep = 0;
+ 437   4                              }
+ 438   3                              else
+ 439   3                              {
+ 440   4                                 //Beep = 1;
+ 441   4                                 SetBeep(1);
+ 442   4                              }          
+ 443   3                      }
+ 444   2                      iBeepCnt = 0;
+ 445   2              }
+ 446   1      
+ 447   1              //LED工作逻辑
+ 448   1              if(iLedCnt == LED_ON_CNT)
+ 449   1              {
+ 450   2                  if((nLedTrgCnt > 0)&&(bStartLedTrg == 1))
+ 451   2                      LEDB = 1;
+ 452   2                      
+ 453   2              }
+ 454   1              else if(iLedCnt == LED_OFF_CNT)
+ 455   1              {
+ 456   2                      if((nLedTrgCnt > 0)&&(bStartLedTrg == 1))
+ 457   2                      {
+ 458   3                              nLedTrgCnt--;
+ 459   3                              if(nLedTrgCnt == 0)
+ 460   3                              {
+ 461   4                                 bCodeEvent = 0;
+ 462   4                                 bStartLedTrg = 0;
+ 463   4                                 LEDB = 1;
+ 464   4                              }
+ 465   3                              else
+ 466   3                                 LEDB = 0;
+ 467   3                      }
+ 468   2                      iLedCnt = 0;
+ 469   2              }
+ 470   1      
+ 471   1              //电击工作逻辑
+ 472   1              if(iAttackCnt == nAttackOffCntC)
+ 473   1              {
+ 474   2                  if((nAttackTrgCnt > 1)&&(bStartAttackTrg == 1))
+ 475   2                      {
+ 476   3                          if(bEnableAttack)
+ 477   3                              {
+ 478   4                                      bBoost  = 1;
+ 479   4                                      bAttack = 0;
+ 480   4                              }
+ 481   3                      }       
+ 482   2              }
+ 483   1              else if(iAttackCnt == (nAttackOffCntC + ATTACK_CHARGE_CNT))
+ 484   1              {
+ 485   2                      if((nAttackTrgCnt > 1)&&(bStartAttackTrg == 1))
+ 486   2                      {
+ 487   3                          if(bEnableAttack)
+C51 COMPILER V9.01   MAIN                                                                  12/09/2018 21:09:03 PAGE 9   
+
+ 488   3                              {
+ 489   4                                      bBoost  = 0;
+ 490   4                                      bAttack = 1;
+ 491   4                              }
+ 492   3                      }
+ 493   2              }
+ 494   1              else if(iAttackCnt == (nAttackOffCntC + ATTACK_DISCHG_CNT))
+ 495   1              {
+ 496   2                      if((nAttackTrgCnt > 1)&&(bStartAttackTrg == 1))
+ 497   2                      {
+ 498   3                          nAttackTrgCnt--;
+ 499   3                              if(nAttackTrgCnt == 1)
+ 500   3                              {
+ 501   4                                 nAttackTrgCnt = 0;
+ 502   4                                 bStartAttackTrg = 0;
+ 503   4                                 if(bEnableAttack)
+ 504   4                                 {
+ 505   5                                         bBoost  = 0;
+ 506   5                                         bAttack = 0;
+ 507   5                                 }
+ 508   4                              }
+ 509   3                              else
+ 510   3                              {
+ 511   4                                 if(bEnableAttack)
+ 512   4                                 {
+ 513   5                                         bBoost  = 0;
+ 514   5                                     bAttack = 0;
+ 515   5                                 }
+ 516   4                              }   
+ 517   3                      }
+ 518   2                  iAttackCnt = 0;
+ 519   2              }
+ 520   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1827    ----
+   CONSTANT SIZE    =    113    ----
+   XDATA SIZE       =     58    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =     11       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)

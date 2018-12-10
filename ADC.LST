@@ -1,0 +1,37 @@
+C51 COMPILER V9.01   ADC                                                                   12/09/2018 21:09:03 PAGE 1   
+
+
+C51 COMPILER V9.01, COMPILATION OF MODULE ADC
+OBJECT MODULE PLACED IN ADC.OBJ
+COMPILER INVOKED BY: E:\Keil_v4\C51\BIN\C51.EXE ADC.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include"ADC.h"
+   2          void ADCInit()
+   3          {
+   4   1          P1M0 &= 0xfe;                               //设置P1.0为ADC口
+   5   1          P1M1 |= 0x01;
+   6   1          ADCCFG = 0x0f;                              //设置ADC时钟为系统时钟/2/16/16
+   7   1          ADC_CONTR = 0x8c;                           //使能ADC模块,通道13
+   8   1          EADC = 1;                                   //使能ADC中断  
+   9   1      }
+  10          
+  11          void StartADC()
+  12          {
+  13   1          ADC_CONTR |= 0x40;                          //启动AD转换
+  14   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     19    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

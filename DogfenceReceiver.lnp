@@ -1,0 +1,10 @@
+"STARTUP.obj",
+"Common.obj",
+"EEPROM.obj",
+"Timer.obj",
+"Uart1.obj",
+"PCA.obj",
+"ADC.obj",
+"main.obj" 
+TO "DogfenceReceiver" 
+RAMSIZE(256) 

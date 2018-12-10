@@ -1,0 +1,39 @@
+C51 COMPILER V9.01   UART1                                                                 12/09/2018 21:09:03 PAGE 1   
+
+
+C51 COMPILER V9.01, COMPILATION OF MODULE UART1
+OBJECT MODULE PLACED IN Uart1.OBJ
+COMPILER INVOKED BY: E:\Keil_v4\C51\BIN\C51.EXE Uart1.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include "uart1.h"
+   2          
+   3          #define FOSC   11095200
+   4          #define BRT    (65535 - FOSC/115200/4)
+   5          
+   6          
+   7          void Uart1Init()
+   8          {
+   9   1        SCON = 0x50;     //REN=1允许串行接受状态，串口工作模式2                         
+  10   1        AUXR |= 0X15;    //开启1T模式
+  11   1        TH2  = BRT>>8;
+  12   1        TL2  = BRT;      // 设置波特率为115200                                                                  
+             -   
+  13   1        //EA   = 1;      // 开总中断 
+  14   1        TI   = 1;
+  15   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     15    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
