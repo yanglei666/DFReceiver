@@ -3,4 +3,5 @@
 #include "Common.h"
 void ADCInit();
 void StartADC();
+void GetADCVal();
 #endif

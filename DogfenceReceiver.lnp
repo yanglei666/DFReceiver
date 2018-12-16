@@ -5,6 +5,7 @@
 "Uart1.obj",
 "PCA.obj",
 "ADC.obj",
+"LVDF.obj",
 "main.obj" 
 TO "DogfenceReceiver" 
 RAMSIZE(256) 

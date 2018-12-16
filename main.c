@@ -11,9 +11,11 @@ sbit LEDR = P2^3;
 sbit LEDG = P2^4;
 sbit LEDB = P2^5;
 sbit Beep = P0^7;
-sbit bAnalog   = P1^6;	//模拟电路开关
-sbit bBoost    = P3^4;	//Boost开关
-sbit bAttack   = P3^5;	//电击开关
+sbit bAnalog   = P1^6;	    //模拟电路开关
+sbit bBoost    = P3^4;	    //Boost开关
+sbit bAttack   = P3^5;	    //电击开关
+sbit BoostCtrl1   = P0^0;	//Boost升压控制开关1
+sbit BoostCtrl2   = P0^1;	//Boost升压控制开关2
 
 bit  bEnableBeep   = 1;
 bit  bEnableAttack = 1;
@@ -28,8 +30,6 @@ u8 nAlarmLevelOld = 1; //上一次档位
 u16 nADCVal = 0;	    //ADC数值
 
 bit  bStartData = 0;
-
-
 u8   nAlarm1BeepEventCnt = 0;
 u8   nAlarm1AttackEventCnt = 0;
 u8   nAlarm2BeepEventCnt = 0;
@@ -48,32 +48,209 @@ bit  bStartBeepTrg    = 0;	 //Beep触发开始标志位
 bit  bBeepFlag        = 0;	 //Beep立即响应标志位
 bit  bStartLedTrg     = 0;	 //Led触发开始标志位
 bit  bStartAttackTrg  = 0;	 //电击触发开始标志位
+bit  bLowPowerAlarm   = 0;	 //低电量警告标志位
+
+//低功耗模块变量
+bit  bStartLowPower   = 0;	 //低功耗触发开始标志位
+bit  bIDLEFlag        = 0;	 //单片机CPU空闲累标志位
+u16  nIDLECnt         = 0;   //单片机CPU空闲累计计数
+u16  nSleepCnt        = 0;   //单片机休眠累计计数
+u16  nGetADCCnt       = 1000;   //单片机测量ADC累计计数，复位第一次测量ADC
 
 //不同档位刺激次数表
 u8 AttackLeveTb[] = {1,2,2,7,13};
 //不同档位电击空闲时间表
 u16 AttackOffTb[] = {969,1969,969,135,52};
 
+//保存EEPROM配置
+void SaveConfig()
+{
+  IapEraseSector(ALARM_SET_ADDR);
+  IapProgramByte(ALARM_SET_ADDR,nAlarmLevel);
+}
+
 //电池管理任务
 void PowerManageTask()
 {
-   if(nADCVal >= POWER_ATTACK_ON)
-   {
-		bEnableAttack = 1;
+	if(nADCVal >= POWER_V27)  //高于2.7V时 P0.0 P0.1 拉低
+	{
+		P0M0 |= 0x03;
+   		P0M1 &= 0xfc;
+		BoostCtrl1 = 0;
+		BoostCtrl2 = 0;
+	}
+	else if((nADCVal < POWER_V25)&&(nADCVal > POWER_V19)) //低于2.5V时 P0.1高阻
+	{
+		P0M0 |= 0x01;
+   		P0M1 &= 0xfe;
+		P0M0 &= 0xfd;
+		P0M1 |= 0x02;
+		BoostCtrl1 = 0;
+	}
+	else if(nADCVal <= POWER_V19)	//低于1.9V时 P0.0 P0.1 全部高阻
+	{
+		P0M0 &= 0xfc;
+		P0M1 |= 0x03;
+	}
+
+	//低于1.7V 低电量报警
+	if(nADCVal < POWER_V17)
+		bLowPowerAlarm = 1;
+	else
+		bLowPowerAlarm = 0;
+}
+
+//低功耗任务
+void LowPowerTask()
+{
+	while(bStartLowPower)  //进入低功耗睡眠模式
+	{
+		EA = 0;            //关闭总中断
+	    bAnalog = 1;	   //关闭模拟电路
+		printf("come sleep1 \n");
+	    _nop_();
+	    _nop_();
+		delay_ms(2);
+	    WKTCH=0x88;	       //定时0.5秒
+	    WKTCL=0x00;
+	    PCON = PD;		   //开始休眠
+			       
+	    bAnalog = 0;       //打开模拟电路
+		nSleepCnt++;
+		if(nSleepCnt == CPU_SLEEP_CNT)
+		{
+			nSleepCnt = 0;
+			//采集ADC当前数据
+            GetADCVal();
+			printf("ADC is %d \n",nADCVal);
+		}
+		PowerManageTask();
+		//如果低电量报警，则闪烁红灯
+		printf("come sleep2 \n");
+		if(bLowPowerAlarm)
+		{
+			LEDR = 0;
+			delay_ms(10);
+			LEDR = 1;
+		}
+		else
+		    delay_ms(5);      //延时一段时间再开中断检测PCA,避免干扰
+		CCF3 = 0;			  //在开中断之前必须先清除中断标志位
+	    EA = 1;		          //打开总中断
+	    WKTCH=0x88;		      //定时0.5秒
+	    WKTCL=0x00;
+	    PCON = PD;	          //开始休眠
+	}
+}
+
+//系统任务
+void SystemTask()
+{
+   //查看是否有事件发生，并做统计，决定是否进入低功耗模式
+   /*if(bIDLEFlag)
+   {	
+   	  nIDLECnt++;
+	  printf("nIDLECnt: %u  \n",nIDLECnt);
+	  delay_ms(5);
+	  if(nIDLECnt >= CPU_IDLE_CNT)
+	  {	
+	  	 bStartLowPower = 1; //打开低功耗模式开关
+		 nIDLECnt = 0;
+		 printf("come bStartLowPower \n");
+	  }	
    }
-   else if(nADCVal <= POWER_ATTACK_OFF)
+   else
    {
-        bEnableAttack = 0;
+   	  nIDLECnt = 0;
+	  printf("nIDLECnt: 0000000\n");
+   }*/
+
+   //1000个周期轮回测量一次ADC
+   nGetADCCnt++;
+   if(nGetADCCnt >= 1000)
+   {
+   		nGetADCCnt = 0;
+   		GetADCVal();
+   }
+   //电池管理任务
+   PowerManageTask();
+   //如果低电量报警，则闪烁红灯
+   if(bLowPowerAlarm)
+   {
+	  LEDR = 0;
+	  delay_ms(10);
+	  LEDR = 1;
+   } 
+}
+
+//PCA事件处理任务
+void PCAEventTask()
+{
+   if(nAlarm1BeepEventCnt > 1)
+   {
+	  if(nBeepTrgCnt == 0)	//如果结束了上一次触发
+	  {
+	     //printf("nAlarm1BeepEventCnt %bu \n",nAlarm1BeepEventCnt);
+	     nAlarm1BeepEventCnt--;
+	  	 nBeepTrgCnt   = 1;
+		 bBeepFlag     = 1;	   
+	  }
+   }
+   
+   if(nAlarm2BeepEventCnt > 1)
+   {
+	  if(nBeepTrgCnt == 0)	//如果结束了上一次触发
+	  {
+	     //printf("nAlarm2BeepEventCnt %bu \n",nAlarm2BeepEventCnt);
+	     nAlarm2BeepEventCnt--;
+	  	 nBeepTrgCnt   = 1;
+		 bBeepFlag     = 1; 
+	  }
    }
 
-   if(nADCVal >= POWER_BEEP_ON)
+   if(nAlarm1AttackEventCnt > 0)
    {
-		bEnableBeep = 1;
+	  if(nAttackTrgCnt == 0)
+	  {
+	     nAlarm1AttackEventCnt--;
+	  	 if(nAlarmLevel > 1)//1档不电击
+		 {
+		    nAlarmLevelOld = nAlarmLevel;
+		 	nAttackTrgCnt  = AttackLeveTb[nAlarmLevel-1];
+		    nAttackOffCntS = AttackOffTb[nAlarmLevel-1];
+		 }
+	  }
    }
-   else if(nADCVal <= POWER_BEEP_OFF)
+   
+   if(nAlarm2AttackEventCnt > 0)
    {
-        bEnableBeep = 0;
+	  if(nAttackTrgCnt == 0)
+	  {
+	     nAlarm2AttackEventCnt--;
+	  	 if(nAlarmLevel > 1)//1档不电击
+		 {
+		    nAlarmLevelOld = nAlarmLevel;
+		 	nAttackTrgCnt  = AttackLeveTb[nAlarmLevel-1];
+		    nAttackOffCntS = AttackOffTb[nAlarmLevel-1];
+		 }
+	  }
    }
+   
+   if(bCodeEvent)
+   {
+      bCodeEvent = 0;
+	  if(nAlarmLevel >= 5)
+	  {
+	     nAlarmLevel = 1;
+	  }	
+	  else
+	  {
+	  	 nAlarmLevel++;
+	  }
+	  SaveConfig();	
+	  nLedTrgCnt = nAlarmLevel;
+      printf("bCodeEvent happen \n");
+   }	
 }
 
 //设置蜂鸣器
@@ -81,18 +258,8 @@ void SetBeep(bit bval)
 {
   	if(bEnableBeep)
 	{
-		if(!bEnableAttack)
-		{
-		    LEDG = ~bval;
-		}
 		Beep = bval;
 	}
-	else
-	    LEDR = ~bval;
-    if(bval)
-    printf("SetBeep 1\n");
-	else
-	printf("SetBeep 0\n");
 }
 
 //获取EEPROM配置
@@ -109,13 +276,6 @@ void LoadConfig()
    nAttackOffCntC = nAttackOffCntS;
 }
 
-//保存EEPROM配置
-void SaveConfig()
-{
-  IapEraseSector(ALARM_SET_ADDR);
-  IapProgramByte(ALARM_SET_ADDR,nAlarmLevel);
-}
-
 void IOInit(void)
 {
    //输出口全部设置推挽输出模式
@@ -129,12 +289,14 @@ void IOInit(void)
    P3M0 |= 0x10;
    P1M0 |= 0x40;
    P1M1 &= 0xbf;
-   P0M0 |= 0x80;
-   P0M1 &= 0x7f;
+   P0M0 |= 0x83;
+   P0M1 &= 0x7c;
 }
 
 void main()
 {  
+   //掉电模式时使用内部SCC模块,功耗约1.5uA
+   VOCTRL = 0x00;                              
    //获取EEPROM配置
    LoadConfig(); 
    //配置Timer3
@@ -147,88 +309,40 @@ void main()
    IOInit();
    //ADC配置
    ADCInit();
+   //低压检测配置
+   //LVDFInit();
    //打开总中断
    EA = 1;
-   //开启ADC转换
-   StartADC();
+
    //打开模拟电路
    bAnalog  = 0;
    bBoost   = 0;
    bAttack  = 0;
    Beep     = 0;
+   BoostCtrl1 = 0;
+   BoostCtrl2 = 0;
 
    while(1)
-   {
-       if(nAlarm1BeepEventCnt > 1)
-	   {
-		  if(nBeepTrgCnt == 0)	//如果结束了上一次触发
-		  {
-		     //printf("nAlarm1BeepEventCnt %bu \n",nAlarm1BeepEventCnt);
-		     nAlarm1BeepEventCnt--;
-		  	 nBeepTrgCnt   = 1;
-			 bBeepFlag     = 1;
-			   
-		  }
-	   }
-	   
-	   if(nAlarm2BeepEventCnt > 1)
-	   {
-		  if(nBeepTrgCnt == 0)	//如果结束了上一次触发
-		  {
-		     //printf("nAlarm2BeepEventCnt %bu \n",nAlarm2BeepEventCnt);
-		     nAlarm2BeepEventCnt--;
-		  	 nBeepTrgCnt   = 1;
-			 bBeepFlag     = 1; 
-		  }
-	   }
-
-	   if(nAlarm1AttackEventCnt > 0)
-	   {
-		  if(nAttackTrgCnt == 0)
-		  {
-		     nAlarm1AttackEventCnt--;
-		  	 if(nAlarmLevel > 1)//1档不电击
-			 {
-			    nAlarmLevelOld = nAlarmLevel;
-			 	nAttackTrgCnt  = AttackLeveTb[nAlarmLevel-1];
-			    nAttackOffCntS = AttackOffTb[nAlarmLevel-1];
-			 }
-		  }
-	   }
-	   
-	   if(nAlarm2AttackEventCnt > 0)
-	   {
-		  if(nAttackTrgCnt == 0)
-		  {
-		     nAlarm2AttackEventCnt--;
-		  	 if(nAlarmLevel > 1)//1档不电击
-			 {
-			    nAlarmLevelOld = nAlarmLevel;
-			 	nAttackTrgCnt  = AttackLeveTb[nAlarmLevel-1];
-			    nAttackOffCntS = AttackOffTb[nAlarmLevel-1];
-			 }
-		  }
-	   }
-	   
-	   if(bCodeEvent)
-	   {
-	      bCodeEvent = 0;
-		  if(nAlarmLevel >= 5)
-		  {
-		     nAlarmLevel = 1;
-		  }	
-		  else
-		  {
-		  	 nAlarmLevel++;
-		  }
-		  SaveConfig();	
-		  nLedTrgCnt = nAlarmLevel;
-	      printf("bCodeEvent happen \n");
-	   }
-	   
-	   //电池管理任务
-	   PowerManageTask();      
+   {     
+	   //低功耗任务
+       LowPowerTask();	   
+       //PCA事件处理任务
+       PCAEventTask();
+	   //系统任务
+       SystemTask();
+	   printf("main is running \n");      
    }
+}
+
+void Lvd_Isr() interrupt 6 using 1
+{
+   PCON &= ~LVDF;         //清中断标志
+   bAnalog  = 1;		  //关闭模拟电路
+   bEnableBeep   = 0;	  //关闭蜂鸣器和boost
+   bEnableAttack = 0;
+   bBoost   = 0;
+   bAttack  = 0;
+   Beep     = 0;
 }
 
 void ADC_Isr() interrupt 5 using 1
@@ -268,7 +382,6 @@ void Timer0() interrupt 1  using 1
 		iCnt = 0;
 		bSigSwitch = 1;
 	}
-	//Signal = (~Signal)&	bSigSwitch;
 }
 
 void PCA_Isr() interrupt 7
@@ -292,7 +405,7 @@ void PCA_Isr() interrupt 7
 			   }
 			   else if(nAlarm1Cnt > 0)
 			   {
-			   	   //printf("invalid  nAlarm1Cnt: %bu nTrgCnt %u\n",nAlarm1Cnt,nTrgCnt);
+			   	   printf("invalid  nAlarm1Cnt: %bu nTrgCnt %u\n",nAlarm1Cnt,nTrgCnt);
 			   }
 			   //138us周期个数检测
 			   if((nAlarm2Cnt <= CC_CNT_HIGH)&&(nAlarm2Cnt >= CC_CNT_LOW)&&(nTrgCnt < CC_LEN_HIGH))
@@ -305,7 +418,7 @@ void PCA_Isr() interrupt 7
 			   }
 			   else if(nAlarm2Cnt > 0)
 			   {
-			   	   //printf("invalid  nAlarm2Cnt: %bu nTrgCnt %u\n",nAlarm2Cnt,nTrgCnt);
+			   	   printf("invalid  nAlarm2Cnt: %bu nTrgCnt %u\n",nAlarm2Cnt,nTrgCnt);
 			   }
 			   //182us周期个数检测
 			   if((nCodeCnt <= CODE_CNT_HIGH)&&(nCodeCnt >= CODE_CNT_LOW)&&(nTrgCnt < CODE_LEN_HIGH))
@@ -314,7 +427,7 @@ void PCA_Isr() interrupt 7
 			   }
 			   else if(nCodeCnt > 0)
 			   {
-			   	   //printf("invalid  nCodeCnt: %bu\n",nCodeCnt);
+			   	   printf("invalid  nCodeCnt: %bu\n",nCodeCnt);
 			   }
 			   //复位操作
 			   bStartData = 0;
@@ -333,6 +446,9 @@ void PCA_Isr() interrupt 7
     if (CCF3)
     {
         CCF3 = 0;
+		bStartLowPower = 0;	//低功耗模式所有开关清0
+		nIDLECnt = 0;	  
+		//printf("PCA_Isr interrupt come \n");
 		nTrgCnt++;
         count0 = count1;                        //备份上一次的捕获值
         ((unsigned char *)&count1)[3] = CCAP3L;
@@ -381,6 +497,7 @@ void Timer3() interrupt 19  using 1
 	iBeepCnt++;
 	iLedCnt++;
 	iAttackCnt++;
+	nIDLECnt++;
 
 	//触发Beep的第一个周期
 	if((bBeepFlag == 1)&&(nBeepTrgCnt == 1))
@@ -390,7 +507,6 @@ void Timer3() interrupt 19  using 1
 	    iBeepCnt  = 1;
 	    bStartBeepTrg = 1;
 		SetBeep(1);
-		//Beep = 1;
 	}
 	 
 	  
@@ -418,7 +534,6 @@ void Timer3() interrupt 19  using 1
 	{
 	    if((nBeepTrgCnt > 0)&&(bStartBeepTrg == 1))
 		{
-			//Beep = 0;
 			SetBeep(0);
 		}    
 	}
@@ -433,11 +548,9 @@ void Timer3() interrupt 19  using 1
 			   bAlarm2Event = 0;
 			   bStartBeepTrg = 0;
 			   SetBeep(0);
-			   //Beep = 0;
 			}
 			else
 			{
-			   //Beep = 1;
 			   SetBeep(1);
 			}	   
 		}
@@ -516,5 +629,12 @@ void Timer3() interrupt 19  using 1
 			}   
 		}
 	    iAttackCnt = 0;
+	}
+
+	//进入低功耗模式逻辑
+	if(nIDLECnt >= CPU_IDLE_CNT)
+	{	
+	    bStartLowPower = 1; //打开低功耗模式开关
+		nIDLECnt = 0;
 	}
 }

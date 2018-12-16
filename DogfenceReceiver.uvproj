@@ -411,6 +411,16 @@
               <FileType>5</FileType>
               <FilePath>.\ADC.h</FilePath>
             </File>
+            <File>
+              <FileName>LVDF.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\LVDF.c</FilePath>
+            </File>
+            <File>
+              <FileName>LVDF.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\LVDF.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

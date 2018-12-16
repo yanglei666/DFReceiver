@@ -4,6 +4,78 @@
 <h1>µVision Build Log</h1>
 <h2>Project:</h2>
 E:\Project\C51\DogfenceReceiver\DogfenceReceiver.uvproj
-Project File Date:  12/09/2018
+Project File Date:  12/13/2018
 
 <h2>Output:</h2>
+Build target 'Application'
+assembling STARTUP.A51...
+compiling Common.c...
+compiling EEPROM.c...
+compiling Timer.c...
+compiling Uart1.c...
+compiling PCA.c...
+compiling ADC.c...
+compiling LVDF.c...
+compiling main.c...
+MAIN.C(304): warning C206: 'Timer3Init': missing function-prototype
+MAIN.C(308): warning C206: 'Uart1Init': missing function-prototype
+linking...
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?TIMER0INIT?TIMER
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?TIMER1INIT?TIMER
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?STARTT3?TIMER
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?STOPT3?TIMER
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?STARTADC?ADC
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?LVDFINIT?LVDF
+*** WARNING L15: MULTIPLE CALL TO SEGMENT
+    SEGMENT: ?PR?PRINTF?PRINTF
+    CALLER1: ?C_C51STARTUP
+    CALLER2: ?PR?PCA_ISR?MAIN
+*** WARNING L15: MULTIPLE CALL TO SEGMENT
+    SEGMENT: ?PR?PRINTF?PRINTF
+    CALLER1: ?PR?PCA_ISR?MAIN
+    CALLER2: ?PR?TIMER3?MAIN
+Program Size: data=37.1 xdata=184 code=4286
+creating hex file from "DogfenceReceiver"...
+"DogfenceReceiver" - 0 Error(s), 10 Warning(s).
+Build target 'Application'
+assembling STARTUP.A51...
+compiling Common.c...
+compiling EEPROM.c...
+compiling Timer.c...
+compiling Uart1.c...
+compiling PCA.c...
+compiling ADC.c...
+compiling LVDF.c...
+compiling main.c...
+MAIN.C(303): warning C206: 'Timer3Init': missing function-prototype
+MAIN.C(307): warning C206: 'Uart1Init': missing function-prototype
+linking...
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?TIMER0INIT?TIMER
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?TIMER1INIT?TIMER
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?STARTT3?TIMER
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?STOPT3?TIMER
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?STARTADC?ADC
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?LVDFINIT?LVDF
+*** WARNING L15: MULTIPLE CALL TO SEGMENT
+    SEGMENT: ?PR?PRINTF?PRINTF
+    CALLER1: ?C_C51STARTUP
+    CALLER2: ?PR?PCA_ISR?MAIN
+*** WARNING L15: MULTIPLE CALL TO SEGMENT
+    SEGMENT: ?PR?PRINTF?PRINTF
+    CALLER1: ?PR?PCA_ISR?MAIN
+    CALLER2: ?PR?TIMER3?MAIN
+Program Size: data=37.1 xdata=184 code=4280
+creating hex file from "DogfenceReceiver"...
+"DogfenceReceiver" - 0 Error(s), 10 Warning(s).

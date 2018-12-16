@@ -34,18 +34,36 @@
 #define CODE_CNT_HIGH   (40 - IGNORE_CNT)	   //182us个数上限
 #define CODE_LEN_HIGH   50
 
+/*
+#define BEEP_ON_CNT         8000      //Beep On时间(单位10us)
+#define BEEP_OFF_CNT        20000     //Beep Off时间(单位10us)
+#define LED_ON_CNT          20000     //Led On时间(单位10us)
+#define LED_OFF_CNT         40000     //Led Off时间(单位10us)
+#define ATTACK_CHARGE_CNT   2000      //充电时间(单位10us)
+#define ATTACK_DISCHG_CNT   2030      //放电时间(单位10us)
+*/
 
-#define BEEP_ON_CNT         80      //Beep On时间
-#define BEEP_OFF_CNT        200     //Beep Off时间
-#define LED_ON_CNT          200     //Led On时间
-#define LED_OFF_CNT         400     //Led Off时间
-#define ATTACK_CHARGE_CNT   20      //充电时间
-#define ATTACK_DISCHG_CNT   21      //放电时间
+#define BEEP_ON_CNT         80      //Beep On时间(单位10us)
+#define BEEP_OFF_CNT        200     //Beep Off时间(单位10us)
+#define LED_ON_CNT          200     //Led On时间(单位10us)
+#define LED_OFF_CNT         400     //Led Off时间(单位10us)
+#define ATTACK_CHARGE_CNT   20      //充电时间(单位10us)
+#define ATTACK_DISCHG_CNT   21      //放电时间(单位10us)
 
 #define POWER_BEEP_ON         0x0936	//使能蜂鸣器阈值1.9V
 #define POWER_BEEP_OFF        0x083e	//关使能蜂鸣器阈值1.7V
 #define POWER_ATTACK_ON       0x0aaa	//使能电击阈值2.2V
 #define POWER_ATTACK_OFF      0x09b2	//关使能电击阈值2.0V
+#define POWER_LOW             0x083e	//关使能电击阈值2.0V
+
+#define POWER_V27             0x0d17	//关使能电击阈值2.7V  3351
+#define POWER_V25             0x0c1f	//关使能电击阈值2.5V  3103
+#define POWER_V21             0x083e	//关使能电击阈值2.1V  2606
+#define POWER_V19             0x083e	//关使能电击阈值1.9V  2358
+#define POWER_V17             0x083e	//关使能电击阈值1.7V
+
+#define CPU_IDLE_CNT        2000	//空闲最大循环次数
+#define CPU_SLEEP_CNT       200	    //CPU休眠最大循环次数
 
 typedef unsigned int  u16;	  //对数据类型进行声明定义
 typedef unsigned char u8;
