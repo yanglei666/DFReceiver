@@ -1,8 +1,8 @@
 #include "uart1.h"
 
-#define FOSC   11095200
-#define BRT    (65535 - FOSC/115200/4)
-
+#define FOSC   5529600
+//#define BRT    (65535 - FOSC/115200/4)
+#define BRT    (65535 - FOSC/9600/4)
 
 void Uart1Init()
 {

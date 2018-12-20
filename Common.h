@@ -15,12 +15,22 @@
 #define BB_FREQ 106
 #define CC_FREQ 70
 
+/*
 #define BB_PWM_LOW      2289   //(207*11059200/1000000)	//212us时间下限
 #define BB_PWM_HIGH     2399   //(217*11059200/1000000)	//212us时间上限
 #define CC_PWM_LOW      1470   //(133*11059200/1000000)	//138us时间下限
 #define CC_PWM_HIGH     1581   //(143*11059200/1000000)	//138us时间上限
 #define CODE_PWM_LOW    1968   //(178*11059200/1000000)	//182us时间下限
 #define CODE_PWM_HIGH   2068   //(187*11059200/1000000)	//182us时间上限
+#define ENDTIME         2
+*/
+
+#define BB_PWM_LOW      1144   //(207*5529600/1000000)	//212us时间下限
+#define BB_PWM_HIGH     1200   //(217*5529600/1000000)	//212us时间上限
+#define CC_PWM_LOW      735    //(133*5529600/1000000)	//138us时间下限
+#define CC_PWM_HIGH     791    //(143*5529600/1000000)	//138us时间上限
+#define CODE_PWM_LOW    984    //(178*5529600/1000000)	//182us时间下限
+#define CODE_PWM_HIGH   1034   //(187*5529600/1000000)	//182us时间上限
 #define ENDTIME         2
 
 #define IGNORE_CNT      3      //忽略的脉冲数
@@ -47,8 +57,9 @@
 #define BEEP_OFF_CNT        200     //Beep Off时间(单位10us)
 #define LED_ON_CNT          200     //Led On时间(单位10us)
 #define LED_OFF_CNT         400     //Led Off时间(单位10us)
-#define ATTACK_CHARGE_CNT   20      //充电时间(单位10us)
-#define ATTACK_DISCHG_CNT   21      //放电时间(单位10us)
+#define ATTACK_CHARGE_CNT   201    //充电时间(单位10us)
+#define ATTACK_DISCHG_CNT   204    //放电时间(单位10us)
+#define ATTACK_IDLE_CNT     700    //电击空闲时间(单位10us)
 
 #define POWER_BEEP_ON         0x0936	//使能蜂鸣器阈值1.9V
 #define POWER_BEEP_OFF        0x083e	//关使能蜂鸣器阈值1.7V
@@ -62,12 +73,20 @@
 #define POWER_V19             0x083e	//关使能电击阈值1.9V  2358
 #define POWER_V17             0x083e	//关使能电击阈值1.7V
 
-#define CPU_IDLE_CNT        2000	//空闲最大循环次数
-#define CPU_SLEEP_CNT       200	    //CPU休眠最大循环次数
+#define CPU_IDLE_CNT        5000	//空闲最大循环次数 5秒
+#define CPU_SLEEP_CNT       10	    //CPU休眠最大循环次数 (1小时测试一次ADC)
+
+#define CLKMS_MAX_CNT       1000	//微秒指针最大循环次数 1000ms
+#define CLKS_MAX_CNT        60	    //秒指针最大循环次数 120s
 
 typedef unsigned int  u16;	  //对数据类型进行声明定义
 typedef unsigned char u8;
 
 void delay_ms(unsigned int n);
 void delay_us(unsigned int n);
+void Delay1ms();		//@5.5296MHz
+void Delay2ms();		//@5.5296MHz
+void Delay3ms();		//@5.5296MHz
+void Delay5ms();		//@5.5296MHz
+void Delay10ms();		//@5.5296MHz
 #endif
